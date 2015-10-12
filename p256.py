@@ -76,6 +76,9 @@ def add(P1, P2):
     if P1[0] == P2[0] and P1[1] != P2[1]:
         return POINT_AT_INFINITY
 
+def mul(k, P):
+    return mul_fast(k, P)
+
 def mul_slow(k, P):
     k %= n
     R1 = POINT_AT_INFINITY
@@ -89,7 +92,7 @@ def mul_slow(k, P):
             R1 = add(R1, R1)
     return R1
 
-def mul(k, P):
+def mul_fast(k, P):
     k %= n
     if k == 0 or P == POINT_AT_INFINITY:
         return POINT_AT_INFINITY
@@ -100,30 +103,44 @@ def mul(k, P):
     return CO_Z_MONTGOMERY_LADDER_SCALAR_MUL(k, P)
 
 def CO_Z_MONTGOMERY_LADDER_SCALAR_MUL(k, P):
-    # { P, P + P } ~= (X1 : X2 : Z)
-    xP, yP = P
-    X2, Z  = POINT_DOUBLING_INTO_X_Z_COORD(P)
-    X1     = (xP * Z) % p
-    # TD=(xP*Z), Ta=(a*Z**2), Tb=(4*b*Z**3)
-    TD = X1
-    Ta = (Z  * Z) % p
-    Tb = (Ta * Z) % p
-    Ta = (Ta * a) % p
-    Tb = (Tb * QUAD_b) % p
-    # Montgomery ladder
+    X1, X2, TD, Ta, Tb, xD, yD = CO_Z_SETUP(P)
     for ki in BITSTRING(k)[1:]:
         if ki == '1':
             X1, X2, TD, Ta, Tb = CO_Z_DIFF_ADD_DBL(X1, X2, TD, Ta, Tb)
         else:
             X2, X1, TD, Ta, Tb = CO_Z_DIFF_ADD_DBL(X2, X1, TD, Ta, Tb)
-    # From { R1, R2 } ~= (X1 : X2 : Z) to R1 ~= (X : Y : Z)
-    X, Y, Z = CO_Z_RECOVERY(X1, X2, TD, Ta, Tb, xD=xP, yD=yP)
+    return CO_Z_RECOVERY(X1, X2, TD, Ta, Tb, xD, yD)
+
+def CO_Z_SETUP(P):
+    # Let (X1, X2, TD, Ta, Tb, xD, yD) represent
+    # the pair of two points R1 and R2 = R1 + D.
+    #
+    #       D  = ( xD     ,  yD )
+    #       R1 = ( X1 / Z ,  ?  )
+    #       R2 = ( X2 / Z ,  ?  )
+    #       TD = xD    * Z
+    #       Ta = a     * Z * Z
+    #       Tb = 4 * b * Z * Z * Z
+    #
+    xD, yD = P
+    X2, Z = POINT_DOUBLING_INTO_X_Z_COORD(P)
+    X1 = ( xD * Z      ) % p
+    Ta = ( Z  * Z      ) % p
+    Tb = ( Ta * Z      ) % p
+    Ta = ( Ta * a      ) % p
+    Tb = ( Tb * QUAD_b ) % p
+    TD = X1
+    return X1, X2, TD, Ta, Tb, xD, yD
+
+def CO_Z_RECOVERY(X1, X2, TD, Ta, Tb, xD, yD):
+    # (Q, Q + D) ~= (X1:X2:Z) -> Q ~= (X:Y:Z) -> Q = (x, y)
+    X, Y, Z = CO_Z_DIFF_COORD_TO_XZ_COORD(X1, X2, TD, Ta, Tb, xD, yD)
     iZ = INV(Z)
     return (X * iZ) % p, (Y * iZ) % p
 
 def CO_Z_DIFF_ADD_DBL(X1, X2, TD, Ta, Tb):
-    # Using (X1 : X2 : Z) representation for a pair of two points, convert
-    # (R1, R2) into (R1 + R2, R2 + R2) using (10 M + 5 S + 13 add).
+    # Using (X1:X2:Z) representation for a pair of two points, convert the
+    # pair (R1, R2) into (R1 + R2, R2 + R2) using (10 M + 5 S + 13 add).
     R2 = (X1 - X2) % p; R1 = (R2 * R2) % p; R2 = (X2 * X2) % p;
     R3 = (R2 - Ta) % p; R4 = (R3 * R3) % p; R5 = (X2 + X2) % p;
     R3 = (R5 * Tb) % p; R4 = (R4 - R3) % p; R5 = (R5 + R5) % p;
@@ -136,10 +153,9 @@ def CO_Z_DIFF_ADD_DBL(X1, X2, TD, Ta, Tb):
     X1 = (X1 - R1) % p; TD = R1; Ta = R2;
     return X1, X2, TD, Ta, Tb
 
-def CO_Z_RECOVERY(X1, X2, TD, Ta, Tb, xD, yD):
-    # Convert an (X1 : X2 : Z) representation for the pair (R1, R2) with the
-    # difference R2 - R1 == D already known into an (X : Y : Z) representation
-    # for the point R1 using (10 M + 3 S + 8 add).
+def CO_Z_DIFF_COORD_TO_XZ_COORD(X1, X2, TD, Ta, Tb, xD, yD):
+    # Convert an (X1:X2:Z) representation for the pair (R1, R1 + D) into an
+    # (X:Y:Z) representation for R1 using (10 M + 3 S + 8 add).
     R1 = (TD * X1) % p; R2 = (R1 + Ta) % p; R3 = (X1 + TD) % p;
     R4 = (R2 * R3) % p; R3 = (X1 - TD) % p; R2 = (R3 * R3) % p;
     R3 = (R2 * X2) % p; R4 = (R4 - R3) % p; R4 = (R4 + R4) % p;
