@@ -5,6 +5,8 @@
 #       n
 #       add
 #       mul
+#       point_to_octetstring
+#       point_from_octetstring
 #
 
 p  = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
@@ -14,6 +16,8 @@ xG = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296
 yG = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
 G  = xG, yG
 n  = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
+
+# a, b, xG, and yG are elements in GF(p)
 
 b_QUAD = (4 * b) % p
 
