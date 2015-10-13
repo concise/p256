@@ -15,7 +15,9 @@ yG = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5
 G  = xG, yG
 n  = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
 
-QUAD_b = (4 * b) % p
+b_QUAD = (4 * b) % p
+
+p_LEN = (lambda _: (_ // 8) + (1 if _ % 8 > 0 else 0))(p.bit_length())
 
 POINT_AT_INFINITY = None
 
@@ -33,6 +35,66 @@ def SELF_TEST():
     assert mul(k2, G) == (x2, y2)
     assert mul(k3, G) == (x3, y3)
     print('All tests pass')
+
+def point_from_octetstring(octetstring):
+    if len(octetstring) == 1 and octetstring[0] == 0x00:
+        return POINT_AT_INFINITY
+    elif len(octetstring) == 1 + p_LEN and octetstring[0] in {0x02, 0x03}:
+        y_parity = octetstring[0] & 1
+        x = int.from_bytes(octetstring[1:33], byteorder='big', signed=False)
+        y = y_candidates_from_x(x)[y_parity]
+        return x, y
+    elif len(octetstring) == 1 + p_LEN + p_LEN and octetstring[0] == 0x04:
+        x = int.from_bytes(octetstring[1:33], byteorder='big', signed=False)
+        y = int.from_bytes(octetstring[33:65], byteorder='big', signed=False)
+        require_on_curve(x, y)
+        return x, y
+    else:
+        raise ValueError
+
+def y_candidates_from_x(x):
+    # Get a pair (y0, y1) such that both (x, y0) and (x, y1) are points on the
+    # curve, where y0 is an even integer and y1 is an odd integer.
+    #
+    # In GF(p):
+    #
+    #   x ** p         === x
+    #   x ** (p+1)     === x ** 2
+    #   x ** ((p+1)/2) === x
+    #   x ** ((p+1)/4) === y
+    #   y ** 2         === x
+    #
+    # assuming p === 3 (mod 4)
+    #
+    assert p & 3 == 3
+    y_squared = (x * x * x + a * x + b) % p
+    y = pow(y_squared, (p + 1) // 4, p)
+    if y * y % p != y_squared:
+        raise ValueError
+    return (y, -y % p) if (y & 1 == 0) else (-y % p, y)
+
+def require_on_curve(x, y):
+    if on_curve(x, y):
+        pass
+    else:
+        raise ValueError
+
+def on_curve(x, y):
+    lhs = (y * y) % p
+    rhs = (x * x * x + a * x + b) % p
+    return lhs == rhs
+
+def point_to_octetstring(point, compressed=False):
+    if point == POINT_AT_INFINITY:
+        return b'\x00'
+    elif compressed == False:
+        XX = point[0].to_bytes(length=p_LEN, byteorder='big', signed=False)
+        YY = point[1].to_bytes(length=p_LEN, byteorder='big', signed=False)
+        return b'\x04' + XX + YY
+    else:
+        XX = point[0].to_bytes(length=p_LEN, byteorder='big', signed=False)
+        y_parity = point[1] & 1
+        return (b'\x02', b'\x03')[y_parity] + XX
 
 def BITSTRING(k):
     return '{:b}'.format(k)
@@ -128,7 +190,7 @@ def CO_Z_SETUP(P):
     Ta = ( Z  * Z      ) % p
     Tb = ( Ta * Z      ) % p
     Ta = ( Ta * a      ) % p
-    Tb = ( Tb * QUAD_b ) % p
+    Tb = ( Tb * b_QUAD ) % p
     TD = X1
     return X1, X2, TD, Ta, Tb, xD, yD
 
