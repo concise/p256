@@ -241,3 +241,33 @@ def CO_Z_DIFF_COORD_TO_XZ_COORD(X1, X2, TD, Ta, Tb, xD, yD):
 #       http://csrc.nist.gov/groups/ST/toolkit/documents/dss/NISTReCur.pdf
 #       http://joye.site88.net/papers/HJS11coz.pdf
 #
+
+
+
+#
+# TODO
+#
+# * Types
+#
+#       BOOLEAN       {TRUE, FALSE}   bool
+#       OCTETSTRING   {0..255}*       bytes
+#       INTEGER       Z               int
+#       ECPOINT       E               tuple, int, and NoneType
+#       EXCEPTION                     BaseException
+#
+# * Operations on the elliptic curve cyclic group P-256
+#
+#       ZERO_POINT    : E
+#       BASE_POINT    : E
+#       eq            : E x E     -> {TRUE, FALSE}
+#       neg           : E         -> E
+#       add           : E x E     -> E
+#       mul           : Z x E     -> E
+#       xcoord2int    : E         -> Z
+#       deserialize   : {0..255}* -> E
+#       serialize     : E         -> {0..255}*
+#
+# * Extract public key octet string from an X.509 version 3 certificate
+#
+# * ECDSA signature verification
+#
