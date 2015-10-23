@@ -1,49 +1,122 @@
-#
-# (int | bytes | tuple) -> TypeError | bytes
-#
+#def B2H(x):
+#    if type(x) is not bytes:
+#        raise TypeError
+#    import binascii
+#    return binascii.hexlify(x).decode()
 
-def encode_a_value(value):
-    if type(value) is int:
-        return encode_an_INTEGER(value)
-    if type(value) is bytes:
-        return encode_an_OCTETSTRING(value)
-    if type(value) is tuple:
-        return encode_a_SEQUENCE(value)
+#def H2B(x):
+#    try:
+#        import binascii
+#        return binascii.unhexlify(x.encode())
+#    except:
+#        raise TypeError from None
+
+def B2H(b):
+    if type(b) is not bytes:
+        raise TypeError
+    output = ''
+    for octet in b:
+        output += ('0123456789abcdef'[octet >> 4] +
+                   '0123456789abcdef'[octet & 15])
+    return output
+
+def H2B(s):
+    if not (type(s) is str and len(s) % 2 == 0 and
+            all(map(lambda c: c in '0123456789abcdef', s))):
+        raise TypeError
+    output = b''
+    for i in range(0, len(s) // 2):
+        lhs = '0123456789abcdef'.index(s[2*i    ]) << 4
+        rhs = '0123456789abcdef'.index(s[2*i + 1])
+        output += bytes((lhs + rhs,))
+    return output
+
+################
+
+def encode_uint(x):
+    assert type(x) is int and x >= 0
+    nbytes = 1; bound = 256
+    while not (bound > x):
+        nbytes += 1; bound <<= 8
+    return int.to_bytes(x, length=nbytes, byteorder='big', signed=False)
+
+def decode_uint(x):
+    assert type(x) is bytes and len(x) > 0 and (len(x) == 1 or x[0] != 0)
+    return int.from_bytes(x, byteorder='big', signed=False)
+
+################
+
+def encode_sint(x):
+    def _twoscomplement_bit_length(x):
+        assert type(x) is int
+        if x < 0:
+            x = -x - 1
+        m = 0; n = 1
+        while not (n > x):
+            m += 1; n *= 2
+        return m + 1
+    def _twoscomplement_byte_length(x):
+        assert type(x) is int
+        bitlen = _twoscomplement_bit_length(x)
+        return (bitlen // 8) + (bitlen % 8 != 0)
+    assert type(x) is int
+    l = _twoscomplement_byte_length(x)
+    return int.to_bytes(x, length=l, byteorder='big', signed=True)
+
+def decode_sint(x):
+    def _is_shortest_twoscomplement_encoding(x):
+        if type(x) is not bytes:
+            return False
+        if len(x) == 0:
+            return False
+        if len(x) == 1:
+            return True
+        if x[0] == 0b00000000 and (x[1] >> 7) == 0b0:
+            return False
+        if x[0] == 0b11111111 and (x[1] >> 7) == 0b1:
+            return False
+        return True
+    assert _is_shortest_twoscomplement_encoding(x)
+    return int.from_bytes(x, byteorder='big', signed=True)
+
+
+
+
+
+
+# encoding marshalling   serialization   stringifying
+# decoding unmarshalling deserialization parsing
+
+def encode(x):
+    if type(x) is int:
+        V = encode_sint(x)
+        L = encode_length(len(V))
+        T = b'\x02'
+        return T + L + V
+    if type(x) is bytes:
+        V = x
+        L = encode_length(len(V))
+        T = b'\x04'
+        return T + L + V
+    if type(x) is tuple:
+        V = b''.join(map(encode, x))
+        L = encode_length(len(V))
+        T = b'\x30'
+        return T + L + V
     raise TypeError
 
-def encode_length(length):
-    if 0 <= length <= 0x7f:
-        return unsigned_integer_encode(length)
+def encode_length(x):
+    assert type(x) is int and x >= 0
+    if 0 <= x <= 0x7f:
+        length = encode_uint(x)
+        return length
     else:
-        return encode_long_length(length)
-
-def encode_long_length(length):
-    length_octets = unsigned_integer_encode(length)
-    prefix = unsigned_integer_encode(0b10000000 | len(length_octets))
-    return prefix + length_octets
-
-def encode_an_INTEGER(value):
-    assert type(value) is int
-    contents_octets = twoscomplement_signed_integer_encode(value)
-    length_octets = encode_length(len(contents_octets))
-    identifier_octets = b'\x02'
-    return identifier_octets + length_octets + contents_octets
-
-def encode_an_OCTETSTRING(value):
-    assert type(value) is bytes
-    contents_octets = value
-    length_octets = encode_length(len(contents_octets))
-    identifier_octets = b'\x04'
-    return identifier_octets + length_octets + contents_octets
-
-def encode_a_SEQUENCE(value):
-    assert type(value) is tuple
-    contents_octets = b''
-    for val in value:
-        contents_octets += encode_a_value(val)
-    length_octets = encode_length(len(contents_octets))
-    identifier_octets = b'\x30'
-    return identifier_octets + length_octets + contents_octets
+        length = encode_uint(x)
+        lenlen = len(length)
+        if not (0b00000001 <= lenlen <= 0b01111110):
+            raise TypeError
+        prefix = encode_uint(0b10000000 | lenlen)
+        return prefix + length
 
 #
 # bytes -> TypeError | ((int | bytes | tuple), bytes)
@@ -57,7 +130,7 @@ def encode_a_SEQUENCE(value):
 # three ASN.1 data types now: INTEGER, OCTETSTRING, and SEQUENCE.
 #
 
-def decode_to_value(stream):
+def decode(stream):
     value, tail = decode_to_value_and_tail(stream)
     if tail == b'':
         return value
@@ -101,7 +174,7 @@ def decode_to_long_length_and_tail(stream):
         raise TypeError
     if length_octets[0] == 0x00:
         raise TypeError
-    length = unsigned_integer_decode(length_octets)
+    length = decode_uint(length_octets)
     return length, tail_octets
 
 def decode_to_INTEGER_value_and_tail(stream):
@@ -109,7 +182,7 @@ def decode_to_INTEGER_value_and_tail(stream):
     stream = stream[1:]
     length, contents, tail = decode_to_length_contents_and_tail(stream)
     try:
-        value = twoscomplement_signed_integer_decode(contents)
+        value = decode_sint(contents)
     except AssertionError:
         raise TypeError from None
     return value, tail
@@ -129,57 +202,3 @@ def decode_to_SEQUENCE_value_and_tail(stream):
         v, contents = decode_to_value_and_tail(contents)
         value += (v,)
     return value, tail
-
-def twoscomplement_signed_integer_encode(x):
-    def _twoscomplement_bit_length(x):
-        assert type(x) is int
-        if x < 0:
-            x = -x - 1
-        m = 0; n = 1
-        while not (n > x):
-            m += 1; n *= 2
-        return m + 1
-    def _twoscomplement_byte_length(x):
-        assert type(x) is int
-        bitlen = _twoscomplement_bit_length(x)
-        return (bitlen // 8) + (bitlen % 8 != 0)
-    assert type(x) is int
-    l = _twoscomplement_byte_length(x)
-    return int.to_bytes(x, length=l, byteorder='big', signed=True)
-
-def twoscomplement_signed_integer_decode(x):
-    def _is_shortest_twoscomplement_encoding(x):
-        if type(x) is not bytes:
-            return False
-        if len(x) == 0:
-            return False
-        if len(x) == 1:
-            return True
-        if x[0] == 0b00000000 and (x[1] >> 7) == 0b0:
-            return False
-        if x[0] == 0b11111111 and (x[1] >> 7) == 0b1:
-            return False
-        return True
-    assert _is_shortest_twoscomplement_encoding(x)
-    return int.from_bytes(x, byteorder='big', signed=True)
-
-def unsigned_integer_encode(x):
-    assert type(x) is int and x >= 0
-    nbytes = 1; bound = 256
-    while not (bound > x):
-        nbytes += 1; bound <<= 8
-    return int.to_bytes(x, length=nbytes, byteorder='big', signed=False)
-
-def unsigned_integer_decode(x):
-    assert type(x) is bytes and len(x) > 0 and (len(x) == 1 or x[0] != 0)
-    return int.from_bytes(x, byteorder='big', signed=False)
-
-
-def H2B(h):
-    # H2B('010203') == b'\x01\x02\x03'
-    return bytes.fromhex(h)
-
-def B2H(b):
-    # B2H(b'\x01\x02\x03') == '010203'
-    import codecs
-    return codecs.encode(b, 'hex').decode()
