@@ -3,8 +3,47 @@
 #
 
 def encode_a_value(value):
-    pass
-    # TODO
+    if type(value) is int:
+        return encode_an_INTEGER(value)
+    if type(value) is bytes:
+        return encode_an_OCTETSTRING(value)
+    if type(value) is tuple:
+        return encode_a_SEQUENCE(value)
+    raise TypeError
+
+def encode_length(length):
+    if 0 <= length <= 0x7f:
+        return unsigned_integer_encode(length)
+    else:
+        return encode_long_length(length)
+
+def encode_long_length(length):
+    length_octets = unsigned_integer_encode(length)
+    prefix = unsigned_integer_encode(0b10000000 | len(length_octets))
+    return prefix + length_octets
+
+def encode_an_INTEGER(value):
+    assert type(value) is int
+    contents_octets = twoscomplement_signed_integer_encode(value)
+    length_octets = encode_length(len(contents_octets))
+    identifier_octets = b'\x02'
+    return identifier_octets + length_octets + contents_octets
+
+def encode_an_OCTETSTRING(value):
+    assert type(value) is bytes
+    contents_octets = value
+    length_octets = encode_length(len(contents_octets))
+    identifier_octets = b'\x04'
+    return identifier_octets + length_octets + contents_octets
+
+def encode_a_SEQUENCE(value):
+    assert type(value) is tuple
+    contents_octets = b''
+    for val in value:
+        contents_octets += encode_a_value(val)
+    length_octets = encode_length(len(contents_octets))
+    identifier_octets = b'\x30'
+    return identifier_octets + length_octets + contents_octets
 
 #
 # bytes -> TypeError | ((int | bytes | tuple), bytes)
@@ -134,3 +173,13 @@ def unsigned_integer_encode(x):
 def unsigned_integer_decode(x):
     assert type(x) is bytes and len(x) > 0 and (len(x) == 1 or x[0] != 0)
     return int.from_bytes(x, byteorder='big', signed=False)
+
+
+def H2B(h):
+    # H2B('010203') == b'\x01\x02\x03'
+    return bytes.fromhex(h)
+
+def B2H(b):
+    # B2H(b'\x01\x02\x03') == '010203'
+    import codecs
+    return codecs.encode(b, 'hex').decode()
