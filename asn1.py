@@ -4,13 +4,13 @@
 # stringifying  vs parsing
 
 def B2H(x):
-  if not (type(b) is bytes):
+  if not (type(x) is bytes):
     raise TypeError
   return bytes.hex(x)
 
 def H2B(x):
-  if not (type(s) is str and len(s) % 2 == 0 and
-  all(map(lambda c: c in '0123456789abcdef', s))):
+  if not (type(x) is str and len(x) % 2 == 0 and
+  all(map(lambda c: c in '0123456789abcdef', x))):
     raise TypeError
   return bytes.fromhex(x)
 
@@ -90,34 +90,36 @@ def _encode_asn1_long_length(x):
   return prefix + length
 
 def encode_asn1_INTEGER(x):
-  raise NotImplementedError
+  if not (type(x) is int):
+    raise TypeError
+  V = encode_sint(x)
+  L = encode_asn1_length(len(V))
+  T = b'\x02'
+  return T + L + V
 
 def encode_asn1_BITSTRING(x):
-  raise NotImplementedError # https://msdn.microsoft.com/en-us/library/windows/desktop/bb540792(v=vs.85).aspx
+  if not (type(x) is bytes):
+    raise TypeError
+  V = b'\x00' + x
+  L = encode_asn1_length(len(V))
+  T = b'\x03'
+  return T + L + V
 
 def encode_asn1_OCTETSTRING(x):
-  raise NotImplementedError
+  if not (type(x) is bytes):
+    raise TypeError
+  V = x
+  L = encode_asn1_length(len(V))
+  T = b'\x04'
+  return T + L + V
 
 def encode_asn1_SEQUENCE(x):
-  raise NotImplementedError
-
-def encode_asn1_value(x):
-  if type(x) is int:
-    V = encode_sint(x)
-    L = encode_asn1_length(len(V))
-    T = b'\x02'
-    return T + L + V
-  if type(x) is bytes:
-    V = x
-    L = encode_asn1_length(len(V))
-    T = b'\x04'
-    return T + L + V
-  if type(x) is tuple:
-    V = b''.join(map(encode_asn1_value, x))
-    L = encode_asn1_length(len(V))
-    T = b'\x30'
-    return T + L + V
-  raise TypeError
+  if not (type(x) is tuple and all(map(lambda e: type(e) is bytes, x))):
+    raise TypeError
+  V = b''.join(x)
+  L = encode_asn1_length(len(V))
+  T = b'\x30'
+  return T + L + V
 
 ###############################################################################
 
