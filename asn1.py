@@ -14,6 +14,8 @@ def H2B(x):
     raise TypeError
   return bytes.fromhex(x)
 
+###############################################################################
+
 def encode_uint(x):
   if not (type(x) is int and x >= 0):
     raise TypeError
@@ -26,6 +28,19 @@ def decode_uint(x):
   if not (type(x) is bytes and len(x) >= 1 and (len(x) == 1 or x[0] != 0)):
     raise TypeError
   return int.from_bytes(x, byteorder='big', signed=False)
+
+###############################################################################
+
+def encode_sint(x):
+  if not (type(x) is int):
+    raise TypeError
+  length = _twoscomplement_byte_length(x)
+  return int.to_bytes(x, length=length, byteorder='big', signed=True)
+
+def decode_sint(x):
+  if not _is_twoscomplement_encoded(x):
+    raise TypeError
+  return int.from_bytes(x, byteorder='big', signed=True)
 
 def _twoscomplement_bit_length(x):
   if x < 0:
@@ -52,32 +67,21 @@ def _is_twoscomplement_encoded(x):
     return False
   return True
 
-def encode_sint(x):
-  if not (type(x) is int):
-    raise TypeError
-  length = _twoscomplement_byte_length(x)
-  return int.to_bytes(x, length=length, byteorder='big', signed=True)
+###############################################################################
 
-def decode_sint(x):
-  if not _is_twoscomplement_encoded(x):
-    raise TypeError
-  return int.from_bytes(x, byteorder='big', signed=True)
-
-################
-
-def encode_length(x):
+def encode_asn1_length(x):
   if not (type(x) is int and x >= 0):
     raise TypeError
   if 0x00 <= x <= 0x7f:
-    return _encode_short_length(x)
+    return _encode_asn1_short_length(x)
   else:
-    return _encode_long_length(x)
+    return _encode_asn1_long_length(x)
 
-def _encode_short_length(x):
+def _encode_asn1_short_length(x):
   length = encode_uint(x)
   return length
 
-def _encode_long_length(x):
+def _encode_asn1_long_length(x):
   length = encode_uint(x)
   lenlen = len(length)
   if not (0b00000001 <= lenlen <= 0b01111110):
@@ -85,23 +89,37 @@ def _encode_long_length(x):
   prefix = encode_uint(0b10000000 | lenlen)
   return prefix + length
 
-def encode(x):
+def encode_asn1_INTEGER(x):
+  raise NotImplementedError
+
+def encode_asn1_BITSTRING(x):
+  raise NotImplementedError # https://msdn.microsoft.com/en-us/library/windows/desktop/bb540792(v=vs.85).aspx
+
+def encode_asn1_OCTETSTRING(x):
+  raise NotImplementedError
+
+def encode_asn1_SEQUENCE(x):
+  raise NotImplementedError
+
+def encode_asn1_value(x):
   if type(x) is int:
     V = encode_sint(x)
-    L = encode_length(len(V))
+    L = encode_asn1_length(len(V))
     T = b'\x02'
     return T + L + V
   if type(x) is bytes:
     V = x
-    L = encode_length(len(V))
+    L = encode_asn1_length(len(V))
     T = b'\x04'
     return T + L + V
   if type(x) is tuple:
-    V = b''.join(map(encode, x))
-    L = encode_length(len(V))
+    V = b''.join(map(encode_asn1_value, x))
+    L = encode_asn1_length(len(V))
     T = b'\x30'
     return T + L + V
   raise TypeError
+
+###############################################################################
 
 #
 # bytes -> TypeError | ((int | bytes | tuple), bytes)
