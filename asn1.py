@@ -123,18 +123,6 @@ def encode_asn1_SEQUENCE(x):
 
 ###############################################################################
 
-#
-# bytes -> TypeError | ((int | bytes | tuple), bytes)
-#
-#
-# This decoder turns a bytes object into a *value*, where a *value* is
-# either an int object, a bytes object, or a tuple object containing zero
-# or more *values*.
-#
-# This is just a decoder for DER encoded ASN.1 values.  It only implements
-# three ASN.1 data types now: INTEGER, OCTETSTRING, and SEQUENCE.
-#
-
 def decode(stream):
     value, tail = decode_to_value_and_tail(stream)
     if tail == b'':
