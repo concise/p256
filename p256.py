@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+
+import sys
+
 #
 # Export these symbols
 #
@@ -271,3 +275,45 @@ def CO_Z_DIFF_COORD_TO_XZ_COORD(X1, X2, TD, Ta, Tb, xD, yD):
 #
 # * ECDSA signature verification
 #
+
+def main():
+    args = tuple(sys.argv)[1::]
+    if len(args) == 3 and args[0] == 'mul':
+        main_mul(*args[1::])
+    elif len(args) == 3 and args[0] == 'add':
+        main_add(*args[1::])
+    else:
+        sys.exit(1)
+
+def main_mul(scalar_hexstr, point_hexstr):
+    try:
+        scalar = int(scalar_hexstr, 16)
+        point = point_from_octetstring(bytes.fromhex(point_hexstr))
+        result_point = mul(scalar, point)
+        sys.stdout.buffer.write(point_to_octetstring(result_point))
+    except:
+        sys.exit(1)
+
+def main_add(point1_hexstr, point2_hexstr):
+    try:
+        point1 = point_from_octetstring(bytes.fromhex(point1_hexstr))
+        point2 = point_from_octetstring(bytes.fromhex(point2_hexstr))
+        result_point = add(point1, point2)
+        sys.stdout.buffer.write(point_to_octetstring(result_point))
+    except:
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
+
+'''
+
+Example usage:
+
+$ p256.py mul 9cbbd852aefdba71d2390201451a869933786c7eafe827e8900265a9dba22d2e 044d75c0d632ebbe8e1941e31a0838434874952af2b8f500a9c906bc8a7a0f5aba224e92b22159e2b7543dff1c352004d71efdeac802fe479e936156238f711b79 | xxd -p | tr -d \\n
+04cd6f0c68fcb7e7840863ba502f28b0c8809bd998102fb1fa04a7ace6353a7788c0f48b0db6e9899cfb79dcb47a938d8fe8632a6f2e72c37babd654a93eccb504
+
+$ p256.py add 04baa80d40d267d468c5e8aa61d7a64c3649b495037125b024eefd989dff7ce8fd2414aa7e82b7081b2f96b6a424d94438382ec0c336f743507baa523dd030f1b2 044d6e59ba83776d5f341bc6396f8b4f4fef35583cdd0b3031c317fda066211d4dc93c2f8a7d7f18a2d8e24271fa39ca4abde856c52046b1beaaf2e01b3ab463df | xxd -p | tr -d \\n
+047645cf8e511211d388361a5b7b88920784e1e7a1059bc56967fc56b07c5d9423685c580d119f2d06896883a3efd23883a06a0dcfb776f78c71f02e2c03fac536
+
+'''
