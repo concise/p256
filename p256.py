@@ -118,6 +118,7 @@ def POINT_ADDITION(P1, P2):
     x3 = (v * v - x1 - x2) % p
     y3 = (v * (x1 - x3) - y1) % p
     return x3, y3
+    # This requires that we have: x2 !== x1 mod n
 
 def POINT_DOUBLING(P1):
     x1, y1 = P1
@@ -125,7 +126,8 @@ def POINT_DOUBLING(P1):
     x4 = (w * w - 2 * x1) % p
     y4 = (w * (x1 - x4) - y1) % p
     return x4, y4
-    # Doubling will never yield the point at infinity if n is an odd integer.
+    # This requires that we have: 2 * y1 !== 0 mod n
+    # Doubling a nonzero will never yield a zero if n is an odd integer.
 
 def POINT_DOUBLING_INTO_X_Z_COORD(P1):
     x1, y1 = P1
